@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat with GPT</title>
+    <!-- Include necessary scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        /* Basic styling for chat interface */
+        #chat {
+            width: 60%;
+            margin: 0 auto;
+        }
+        #messages {
+            border: 1px solid #ccc;
+            height: 400px;
+            overflow-y: scroll;
+            padding: 10px;
+        }
+        #user-input {
+            width: 100%;
+            padding: 10px;
+        }
+        .message {
+            margin: 5px 0;
+        }
+        .user-message {
+            text-align: right;
+        }
+
+        /* Additional styles */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+    </style>
+</head>
+<body>
+    <h1>Chat with GPT about Segment {{ segment_index + 1 }}</h1>
+    <div id="chat">
+        <div id="messages"></div>
+        <input type="text" id="user-input" placeholder="Type your message here...">
+    </div>
+    <script>
+        (function() {
+            var session_id = "{{ session_id }}";
+            var segment_index = "{{ segment_index }}";
+            var ws_scheme = window.location.protocol === "https:" ? "wss" : "ws";
+            var ws_path = ws_scheme + '://' + window.location.host + "/ws/chat/" + session_id + "/" + segment_index;
+            var socket = new WebSocket(ws_path);
+
+            socket.onopen = function() {
+                console.log("Connected to chat websocket");
+            };
+
+            socket.onmessage = function(event) {
+                var data = JSON.parse(event.data);
+                if (data.message) {
+                    var botMessage = '<div class="message bot-message"><strong>GPT:</strong> ' + data.message + '</div>';
+                    document.getElementById('messages').innerHTML += botMessage;
+                    // Scroll to the bottom
+                    var messagesDiv = document.getElementById('messages');
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }
+            };
+
+            socket.onclose = function(event) {
+                console.log("Chat websocket closed");
+            };
+
+            document.getElementById('user-input').addEventListener('keypress', function(e) {
+                if (e.which == 13 || e.keyCode == 13) {
+                    var input = e.target.value;
+                    if (input.trim() !== '') {
+                        var userMessage = '<div class="message user-message"><strong>You:</strong> ' + input + '</div>';
+                        document.getElementById('messages').innerHTML += userMessage;
+                        socket.send(JSON.stringify({'message': input}));
+                        e.target.value = '';
+                    }
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

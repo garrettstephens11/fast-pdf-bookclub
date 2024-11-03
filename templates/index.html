@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PDF Book Club - Upload</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 50%;
+            margin: 100px auto;
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 30px;
+        }
+
+        input[type="file"] {
+            margin-bottom: 20px;
+        }
+
+        input[type="submit"] {
+            background-color: #3498db;
+            color: #fff;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        input[type="submit"]:hover {
+            background-color: #2980b9;
+        }
+
+        .note {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #888;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to the PDF Book Club</h1>
+        <form action="/" method="post" enctype="multipart/form-data">
+            <input type="file" name="pdf_file" accept=".pdf" required><br>
+            <input type="submit" value="Upload PDF">
+        </form>
+        <p class="note">Please upload a PDF file to start.</p>
+    </div>
+</body>
+</html>

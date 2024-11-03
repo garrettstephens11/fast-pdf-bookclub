@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PDF Book Club - Results</title>
+    <!-- Include jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <!-- Include Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* General styles */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .segment {
+            background-color: #fff;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .discussion-container {
+            background-color: #e2f4fa;
+            padding: 10px;
+            margin-top: 20px;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+
+        /* Styles for formatted text and clipboard icon */
+        .formatted-text-container {
+            position: relative;
+            margin-top: 10px;
+        }
+
+        .copy-to-clipboard {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.5em;
+            color: #333;
+        }
+
+        .copy-to-clipboard:hover {
+            color: #000;
+        }
+
+        .formatted-text {
+            padding-right: 30px; /* Ensure text doesn't overlap with the button */
+        }
+
+        /* Highlighting styles */
+        .highlighted {
+            background-color: #c2e0f4; /* Light blue color for highlighting */
+            padding: 2px;
+        }
+
+        .sentence {
+            display: inline;
+        }
+
+        .sentence-discussion {
+            display: inline;
+        }
+
+        .discussion-highlighted {
+            background-color: #a8c8e4; /* Slightly darker blue color for highlighting discussion text */
+            padding: 2px;
+        }
+
+        /* Audio player styles */
+        audio {
+            display: block;
+            margin-top: 5px;
+        }
+
+        .generate-audio {
+            margin-top: 10px;
+        }
+
+        /* Talk with GPT button styles */
+        .talk-with-gpt-button {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 10px 15px;
+            background-color: #3498db;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+
+        .talk-with-gpt-button:hover {
+            background-color: #2980b9;
+        }
+
+        /* Additional styles */
+        /* ... */
+    </style>
+</head>
+<body>
+    <h1>PDF Book Club</h1>
+
+    {% for index, segment in segments %}
+        <div class="segment">
+            <h2>Segment {{ index + 1 }}</h2>
+
+            <!-- "Format Text (rough)" button -->
+            <form method="POST">
+                <input type="hidden" name="segment" value="{{ segment }}">
+                <input type="button" class="format-text-rough" value="Format Text (rough)">
+            </form>
+
+            <!-- New formatted text container -->
+            <div class="formatted-text-container" style="display:none;">
+                <!-- Clipboard icon button -->
+                <button class="copy-to-clipboard" aria-label="Copy to clipboard">
+                    <i class="fas fa-clipboard"></i>
+                </button>
+                <!-- Formatted text area -->
+                <p class="formatted-text"></p>
+            </div>
+
+            <!-- Existing segment text (hidden when formatted text is shown) -->
+            <p class="segment-text">{{ segment.replace('\n', '<br>')|safe }}</p>
+
+            <!-- Generate Discussion form -->
+            <form method="POST" action="/generate">
+                <input type="hidden" name="index" value="{{ index }}">
+                <input type="hidden" name="segment" value="{{ segment }}">
+                <input type="button" class="generate-discussion" value="Generate Discussion">
+                <label for="relation_text">[Optional] relate the passage to:</label>
+                <input type="text" name="relation_text" placeholder="Your input here...">
+            </form>
+
+            {% if discussions and index|string in discussions %}
+                <div class="discussion-container">
+                    <h3>Discussion</h3>
+                    {% for disc_num, disc in discussions[index|string]|enumerate %}
+                        <div class="discussion" data-discussion-num="{{ disc_num }}">
+                            {% if disc.lines %}
+                                {% for line in disc.lines %}
+                                    <p>
+                                        <strong>{{ line.speaker }}:</strong> {{ line.text }}
+                                        <!-- Audio playback control -->
+                                        {% if line.audio_url %}
+                                            <audio controls>
+                                                <source src="{{ line.audio_url }}" type="audio/mpeg">
+                                                Your browser does not support the audio element.
+                                            </audio>
+                                        {% endif %}
+                                    </p>
+                                {% endfor %}
+                            {% else %}
+                                <p>{{ disc.text|safe }}</p>
+                            {% endif %}
+                            <!-- "Generate Voices" button -->
+                            {% if not disc.audio_generated %}
+                                <input type="button" class="generate-audio" value="Generate Voices">
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                    <!-- Add the new "Another Turn" button -->
+                    <input type="button" class="another-turn" value="Another Turn">
+                </div>
+            {% endif %}
+
+            <!-- Add the "Talk with GPT" button -->
+            <a href="/chat/{{ index }}" class="talk-with-gpt-button">Talk with GPT</a>
+
+        </div>
+    {% endfor %}
+
+    <script>
+        $(document).ready(function() {
+            // Function to support enumerate in Jinja2 templates
+            function enumerate(arr) {
+                return arr.map(function(item, index) {
+                    return [index, item];
+                });
+            }
+
+            // Handler for "Format Text (rough)" button
+            $(".format-text-rough").click(function(){
+                var segment = $(this).closest('form').find('input[name="segment"]').val();
+                var sentences = segment.split('. ');
+                var formattedSegment = '';
+                for(var i = 0; i < sentences.length; i++) {
+                    formattedSegment += sentences[i];
+                    if((i + 1) % 5 == 0 && i != sentences.length - 1) {
+                        formattedSegment += '.<br><br>';
+                    } else if (i != sentences.length - 1) {
+                        formattedSegment += '. ';
+                    }
+                }
+                var segmentDiv = $(this).closest('.segment');
+                // Update the formatted text
+                segmentDiv.find('.formatted-text').html(formattedSegment);
+                // Show the formatted text container
+                segmentDiv.find('.formatted-text-container').show();
+                // Hide the original segment text
+                segmentDiv.find('.segment-text').hide();
+
+                // Highlight sentences
+                currentSegmentElement = segmentDiv.find('.formatted-text');
+                currentHighlightedIndex = -1;  // Reset the highlighted index
+                highlightSentence(currentSegmentElement);
+                moveToNextSentence();  // Automatically highlight the first sentence
+            });
+
+            // Copy to Clipboard functionality
+            $(document).on('click', '.copy-to-clipboard', function() {
+                var segmentElement = $(this).closest('.formatted-text-container').find('.formatted-text');
+
+                var formattedText = '';
+                var newParagraph = true;
+
+                segmentElement.contents().each(function() {
+                    if (this.nodeType === 3) { // Text node
+                        if (newParagraph) {
+                            formattedText += '  ';
+                            newParagraph = false;
+                        }
+                        formattedText += this.nodeValue;
+                    } else if (this.nodeType === 1) { // HTML element
+                        var tagName = this.tagName.toLowerCase();
+                        if (tagName === 'br') {
+                            formattedText += '\n';
+                            if (formattedText.endsWith('\n\n')) {
+                                newParagraph = true;
+                            }
+                        } else if (tagName === 'span') {
+                            formattedText += $(this).text();
+                        }
+                    }
+                });
+
+                var textarea = document.createElement("textarea");
+                textarea.value = formattedText;
+                document.body.appendChild(textarea);
+
+                textarea.select();
+                document.execCommand('copy');
+
+                document.body.removeChild(textarea);
+
+                alert("Text copied to clipboard!");
+            });
+
+            // Variables for highlighting
+            var currentHighlightedIndex = -1;
+            var currentSegmentElement = null;  // Track the current segment we are highlighting in
+
+            // Function to highlight sentences in the segment
+            function highlightSentence(segmentElement) {
+                var sentences = segmentElement.html().split('. ');
+                for (var i = 0; i < sentences.length; i++) {
+                    sentences[i] = '<span class="sentence">' + sentences[i] + (i != sentences.length - 1 ? '.' : '') + '</span>' + (i != sentences.length - 1 ? ' ' : '');
+                }
+                segmentElement.html(sentences.join(''));
+            }
+
+            // Function to move to the next sentence
+            function moveToNextSentence() {
+                if (!currentSegmentElement) return;  // If there's no segment selected, do nothing
+
+                var sentenceClass = '.sentence';
+                var highlightClass = 'highlighted';
+
+                var sentences = currentSegmentElement.find(sentenceClass);
+                if (currentHighlightedIndex >= 0) {
+                    $(sentences[currentHighlightedIndex]).removeClass(highlightClass);
+                }
+                currentHighlightedIndex++;
+                if (currentHighlightedIndex < sentences.length) {
+                    $(sentences[currentHighlightedIndex]).addClass(highlightClass);
+                } else {
+                    currentHighlightedIndex = -1;
+                }
+            }
+
+            // Event listener for right arrow key to move highlight
+            $(document).keydown(function(e) {
+                if (e.keyCode == 39) {  // Right Arrow Key
+                    moveToNextSentence();
+                }
+            });
+
+            // Handler for "Generate Discussion" button
+            $(".generate-discussion").click(function(){
+                var form = $(this).closest('form');
+                $.post(form.attr("action"), form.serialize())
+                .done(function(data){
+                    if (form.closest('.segment').find('.discussion-container').length === 0) {
+                        form.closest('.segment').append('<div class="discussion-container"><h3>Discussion</h3></div>');
+                    }
+                    var discussionContainer = form.closest('.segment').find('.discussion-container');
+                    var lines = data.discussion_lines;
+                    var html = '';
+                    html += '<div class="discussion" data-discussion-num="' + (discussionContainer.find('.discussion').length) + '">';
+                    for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i];
+                        html += '<p><strong>' + line.speaker + ':</strong> ' + line.text + '</p>';
+                    }
+                    // Add "Generate Voices" button
+                    html += '<input type="button" class="generate-audio" value="Generate Voices">';
+                    html += '</div>';
+                    // Append the new discussion
+                    discussionContainer.append(html);
+
+                    // Show the "Another Turn" button
+                    if (discussionContainer.find('.another-turn').length === 0) {
+                        discussionContainer.append('<input type="button" class="another-turn" value="Another Turn">');
+                    }
+                })
+                .fail(function(jqXHR, textStatus, errorThrown){
+                    alert("Failed to generate discussion: " + errorThrown);
+                });
+            });
+
+            // Handler for "Another Turn" button
+            $(document).on('click', '.another-turn', function() {
+                var form = $(this).closest('.segment').find('form[action="/generate"]');
+                var index = form.find('input[name="index"]').val();
+                var segment = form.find('input[name="segment"]').val();
+                var relation_text = form.find('input[name="relation_text"]').val();
+
+                $.post(form.attr("action"), {
+                    'index': index,
+                    'segment': segment,
+                    'relation_text': relation_text,
+                    'additional_turn': 'true'
+                })
+                .done(function(data){
+                    var discussionContainer = form.closest('.segment').find('.discussion-container');
+                    var lines = data.discussion_lines;
+                    var html = '';
+                    html += '<div class="discussion" data-discussion-num="' + (discussionContainer.find('.discussion').length) + '">';
+                    for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i];
+                        html += '<p><strong>' + line.speaker + ':</strong> ' + line.text + '</p>';
+                    }
+                    // Add "Generate Voices" button
+                    html += '<input type="button" class="generate-audio" value="Generate Voices">';
+                    html += '</div>';
+                    // Append the new discussion
+                    discussionContainer.append(html);
+                })
+                .fail(function(jqXHR, textStatus, errorThrown){
+                    alert("Failed to generate another turn: " + errorThrown);
+                });
+            });
+
+            // Handler for "Generate Voices" button
+            $(document).on('click', '.generate-audio', function() {
+                var discussionDiv = $(this).closest('.discussion');
+                var discussionNum = discussionDiv.data('discussion-num');
+                var segmentDiv = $(this).closest('.segment');
+                var index = segmentDiv.find('input[name="index"]').val();
+
+                var button = $(this);
+                button.prop('disabled', true).val('Generating Audio...');
+
+                $.post('/generate_audio', {
+                    'index': index,
+                    'discussion_num': discussionNum
+                })
+                .done(function(data) {
+                    var lines = data.discussion_lines;
+                    var html = '';
+                    for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i];
+                        html += '<p><strong>' + line.speaker + ':</strong> ' + line.text;
+                        if (line.audio_url) {
+                            html += ' <audio controls><source src="' + line.audio_url + '" type="audio/mpeg">Your browser does not support the audio element.</audio>';
+                        }
+                        html += '</p>';
+                    }
+                    // Replace the discussion content with the updated one
+                    discussionDiv.html(html);
+                })
+                .fail(function(jqXHR, textStatus, errorThrown){
+                    alert("Failed to generate audio: " + errorThrown);
+                    button.prop('disabled', false).val('Generate Voices');
+                });
+            });
+
+            // Copy to Clipboard for discussions (if you have this feature)
+            $(document).on('click', '.copy-to-discussion-clipboard', function() {
+                var discussionElement = $(this).closest('.discussion-container');
+                var discussionText = '';
+
+                discussionElement.find('p').each(function() {
+                    discussionText += $(this).text() + '\n\n';
+                });
+
+                var textarea = document.createElement("textarea");
+                textarea.value = discussionText.trim();
+                document.body.appendChild(textarea);
+
+                textarea.select();
+                document.execCommand('copy');
+
+                document.body.removeChild(textarea);
+
+                alert("Discussion copied to clipboard!");
+            });
+
+            // Other existing JavaScript code (if any)
+            // ...
+
+        });
+    </script>
+</body>
+</html>
